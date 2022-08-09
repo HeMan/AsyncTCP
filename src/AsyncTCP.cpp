@@ -29,7 +29,9 @@ extern "C"{
 #include "lwip/dns.h"
 #include "lwip/err.h"
 }
+#if CONFIG_ASYNC_TCP_USE_WDT
 #include "esp_task_wdt.h"
+#endif
 
 /*
  * TCP/IP Event Task
@@ -238,7 +240,7 @@ static bool _start_async_task(){
         return false;
     }
     if(!_async_service_task_handle){
-        customTaskCreateUniversal(_async_service_task, "async_tcp", 8192 * 2, NULL, 3, &_async_service_task_handle, CONFIG_ASYNC_TCP_RUNNING_CORE);
+        customTaskCreateUniversal(_async_service_task, "async_tcp", CONFIG_ASYNC_TCP_STACK_SIZE, NULL, 3, &_async_service_task_handle, CONFIG_ASYNC_TCP_RUNNING_CORE);
         if(!_async_service_task_handle){
             return false;
         }
@@ -703,7 +705,15 @@ bool AsyncClient::_connect(ip_addr_t addr, uint16_t port){
         return false;
     }
 
-    tcp_pcb* pcb = tcp_new_ip_type(addr.type);
+    ip_addr_t addr;
+#if LWIP_IPV4 && LWIP_IPV6
+    addr.type = IPADDR_TYPE_V4;
+    addr.u_addr.ip4.addr = ip;
+#else
+    addr.addr = ip;
+#endif
+
+    tcp_pcb* pcb = tcp_new_ip_type(IPADDR_TYPE_V4);
     if (!pcb){
         log_e("pcb == NULL");
         return false;
@@ -736,18 +746,19 @@ bool AsyncClient::connect(IPv6Address ip, uint16_t port){
 
 bool AsyncClient::connect(const char* host, uint16_t port){
     ip_addr_t addr;
-    
+
     if(!_start_async_task()){
       log_e("failed to start task");
       return false;
     }
-    
+
     err_t err = dns_gethostbyname(host, &addr, (dns_found_callback)&_tcp_dns_found, this);
     if(err == ERR_OK) {
-        if(addr.type == IPADDR_TYPE_V6) {
-            return connect(IPv6Address(addr.u_addr.ip6.addr), port);
-        }
+#if LWIP_IPV4 && LWIP_IPV6
         return connect(IPAddress(addr.u_addr.ip4.addr), port);
+#else
+        return connect(IPAddress(addr.addr), port);
+#endif
     } else if(err == ERR_INPROGRESS) {
         _connect_port = port;
         return true;
@@ -1012,10 +1023,13 @@ int8_t AsyncClient::_poll(tcp_pcb* pcb){
 }
 
 void AsyncClient::_dns_found(struct ip_addr *ipaddr){
+#if LWIP_IPV4 && LWIP_IPV6
     if(ipaddr && ipaddr->u_addr.ip4.addr){
         connect(IPAddress(ipaddr->u_addr.ip4.addr), _connect_port);
-    } else if(ipaddr && ipaddr->u_addr.ip6.addr){
-        connect(IPv6Address(ipaddr->u_addr.ip6.addr), _connect_port);
+#else
+    if (ipaddr && ipaddr->addr){
+        connect(IPAddress(ipaddr->addr), _connect_port);
+#endif
     } else {
         if(_error_cb) {
             _error_cb(_error_cb_arg, this, -55);
@@ -1104,7 +1118,11 @@ uint32_t AsyncClient::getRemoteAddress() {
     if(!_pcb) {
         return 0;
     }
+#if LWIP_IPV4 && LWIP_IPV6
     return _pcb->remote_ip.u_addr.ip4.addr;
+#else
+    return _pcb->remote_ip.addr;
+#endif
 }
 
 ip6_addr_t AsyncClient::getRemoteAddress6() {
@@ -1127,7 +1145,11 @@ uint32_t AsyncClient::getLocalAddress() {
     if(!_pcb) {
         return 0;
     }
+#if LWIP_IPV4 && LWIP_IPV6
     return _pcb->local_ip.u_addr.ip4.addr;
+#else
+    return _pcb->local_ip.addr;
+#endif
 }
 
 ip6_addr_t AsyncClient::getLocalAddress6() {
@@ -1363,9 +1385,12 @@ void AsyncServer::begin(){
     }
 
     ip_addr_t local_addr;
-    local_addr.type = bind_type;
+#if LWIP_IPV4 && LWIP_IPV6
+    local_addr.type = IPADDR_TYPE_V4;
     local_addr.u_addr.ip4.addr = (uint32_t) _addr;
-    memcpy(local_addr.u_addr.ip6.addr, static_cast<const uint32_t*>(_addr6), sizeof(uint32_t) * 4);
+#else
+    local_addr.addr = (uint32_t) _addr;
+#endif
     err = _tcp_bind(_pcb, &local_addr, _port);
 
     if (err != ERR_OK) {
