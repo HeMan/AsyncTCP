@@ -28,7 +28,7 @@
 
 #include <functional>
 
-#ifndef LIBRETUYA
+#ifndef LIBRETINY
 #include "sdkconfig.h"
 extern "C" {
     #include "freertos/semphr.h"
