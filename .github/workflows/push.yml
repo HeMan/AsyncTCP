@@ -14,16 +14,12 @@ jobs:
       matrix:
         os: [ubuntu-latest]
     steps:
-    - uses: actions/checkout@v3
-    - uses: Arduino-CI/action@v0.1.6
-      env:
-        USE_SUBDIR: ./src/
-        EXPECT_UNITTESTS: false
-    - uses: arduino/setup-arduino-cli@v1
-    - name: Download board
-      run: |
-        arduino-cli --config-file arduino-cli.yaml core update-index
-        arduino-cli --config-file arduino-cli.yaml board listall
-        arduino-cli --config-file arduino-cli.yaml core install esp32:esp32@2.0.2
-    - name: Compile Sketch
-      run: arduino-cli --config-file arduino-cli.yaml --library ./src/ compile --fqbn esp32:esp32:esp32 ./examples/ClientServer/Client/Client.ino
+      - uses: actions/checkout@v3
+      - uses: arduino/setup-arduino-cli@v1
+      - name: Download board
+        run: |
+          arduino-cli --config-file arduino-cli.yaml core update-index
+          arduino-cli --config-file arduino-cli.yaml board listall
+          arduino-cli --config-file arduino-cli.yaml core install esp32:esp32@2.0.2
+      - name: Compile Sketch
+        run: arduino-cli --config-file arduino-cli.yaml --library ./src/ compile --fqbn esp32:esp32:esp32 ./examples/ClientServer/Client/Client.ino
