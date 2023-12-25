@@ -13,4 +13,4 @@ jobs:
       - uses: arduino/compile-sketches@v1
         with:
           sketch-paths: |
-            - ./
+            - examples/ClientServer/Server
